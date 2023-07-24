@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+
+set -ex
+
+set +e
+function element_in_list(){
+  element=$1
+  shift 1
+  list=("$@")
+  echo "${list[*]}" | grep -w -q $element
+  return $?
+}
+
+servers=()
+
+ignore_nodes=(33)
+
+for (( node=1; node<=8; node++ ))
+do
+	element_in_list $node "${ignore_nodes[@]}"
+  if [[ $? -eq 1 ]]
+  then
+	   servers+=("node${node}.bdcl")
+	fi
+done
+set -e
+
+registry="node2.bdcl:5000"
+image="llama:latest"
+full_image="${registry}/${image}"
+container_name="llama"
+llama_path="/mnt/ess_storage/DN_1/storage/home/khodorchenko/LM/llama"
+ckpt_path="/llama/llama-2-70b-chat/"
+
+function _exec_remotely_with_counter () {
+    cmd=$1
+    shift 1
+
+    count=1
+    for host in "$@"
+    do
+        echo "Executing on "$host
+        rank=$((count - 1))
+        ssh $host ${cmd}" ${rank}"
+        (( count++ ))
+        echo "Executed"
+    done
+}
+
+function _exec_remotely () {
+    cmd=$1
+    shift 1
+
+    for host in "$@"
+    do
+        echo "Executing on "$host
+        ssh -t $host $cmd
+        echo "Executed"
+    done
+}
+
+function build() {
+    docker build -t "${full_image}" -f Dockerfile .
+}
+
+function push() {
+    docker push "${full_image}"
+}
+
+function pull() {
+    docker pull "${full_image}"
+}
+
+function pull_on_nodes() {
+    # shellcheck disable=SC2068
+    _exec_remotely "docker pull ${full_image}" ${servers[@]}
+}
+
+function install() {
+    build
+    push
+}
+
+function run() {
+    # shellcheck disable=SC2068
+    _exec_remotely_with_counter "docker pull ${full_image} &&
+      docker run
+      --network='host'
+      --mount type=bind,source=/dev/shm,target=/dev/shm
+      --name=${container_name}
+      -e CKPT_DIR_PATH=${ckpt_path}
+      -e WORLD_SIZE=${#servers[@]}
+      -v ${llama_path}:/llama
+      -d ${full_image}" ${servers[@]}
+}
+
+function halt() {
+    # shellcheck disable=SC2068
+    _exec_remotely "docker kill ${container_name} || true && docker rm ${container_name} || true" ${servers[@]}
+}
+
+function help() {
+  echo "
+  List of commands.
+    build - builds docker image with llama sources, installed requirements.
+    push - sends built docker image into the registry.
+    install - combine build and push commands.
+    pull - downloads llama docker image to a local machine.
+    pull-on-nodes - executes pull command on a set of nodes.
+    run - starts docker containers with llama on a set of nodes and performs infer.
+    halt - kills and rm docker containers with llama on a set of nodes.
+    help - prints this message.
+  "
+}
+
+function main () {
+    echo "Checking servers: ${servers[*]}"
+    echo "============================"
+
+    cmd="$1"
+
+    if [ -z "${cmd}" ]
+    then
+      echo "No command is provided."
+      help
+      exit 1
+    fi
+
+    shift 1
+
+    echo "Executing command: ${cmd}"
+
+    case "${cmd}" in
+
+    "help")
+        help
+        ;;
+
+    "build")
+        build
+        ;;
+
+    "push")
+        push
+        ;;
+
+    "pull")
+        pull
+        ;;
+
+    "pull-on-nodes")
+        pull_on_nodes
+        ;;
+
+    "install")
+        install
+        ;;
+
+    "run")
+        run
+        ;;
+
+    "halt")
+        halt
+        ;;
+
+    *)
+        echo "Unknown command: ${cmd}"
+        ;;
+
+    esac
+}
+
+main "${@}"
