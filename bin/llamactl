@@ -15,7 +15,7 @@ servers=()
 
 ignore_nodes=(33)
 
-for (( node=1; node<=8; node++ ))
+for (( node=1; node<=2; node++ ))
 do
 	element_in_list $node "${ignore_nodes[@]}"
   if [[ $? -eq 1 ]]
@@ -30,7 +30,7 @@ image="llama:latest"
 full_image="${registry}/${image}"
 container_name="llama"
 llama_path="/mnt/ess_storage/DN_1/storage/home/khodorchenko/LM/llama"
-ckpt_path="/llama/llama-2-70b-chat/"
+ckpt_path="/llama/llama-2-13b-chat/"
 
 function _exec_remotely_with_counter () {
     cmd=$1

@@ -22,4 +22,4 @@ torchrun \
     example_text_completion.py \
     --ckpt_dir ${CKPT_DIR_PATH} \
     --tokenizer_path /llama/tokenizer.model \
-    --max_seq_len 128 --max_batch_size 1
+    --max_seq_len 1024 --max_gen_len=512 --max_batch_size 1

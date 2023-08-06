@@ -199,6 +199,9 @@ class Llama:
             logprobs=logprobs,
             echo=echo,
         )
+
+        print(f"OUTPUT GENERATION LENGTH: {len(generation_tokens)}")
+
         if logprobs:
             return [
                 {
