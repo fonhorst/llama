@@ -89,6 +89,7 @@ def main(
         batch_size=max_batch_size,
     )
     checked_files = set(os.listdir(prediction_files_dir))
+    count_cycles = 0
     while True:
         try:
             files_to_check = list(set(os.listdir(prompts_directory)) - checked_files)
@@ -99,7 +100,7 @@ def main(
                     with open(os.path.join(prompts_directory, file), 'r') as f:
                         retrieved_prompts = json.load(f)
                     prompt_files.append(FilePrompts(path_to_file=file, prompts=retrieved_prompts))
-                except json.JSONDecoder as exc:
+                except (json.JSONDecoder, FileNotFoundError) as exc:
                     logging.warning(f"{file} could not be loaded")
                     continue
                 finally:
@@ -108,7 +109,9 @@ def main(
             #     prompt_files = [None] * len(files_to_check)
             # dist.broadcast_object_list(prompt_files, src=0)
             if not prompt_files:
-                logging.warning("Waiting for new files...")
+                count_cycles += 1
+                if count_cycles % 25 == 0:
+                    logging.warning("Waiting for new files...")
                 time.sleep(60)
                 continue
             else:
