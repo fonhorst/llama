@@ -16,6 +16,7 @@ from fairscale.nn.model_parallel.initialize import (
     model_parallel_is_initialized,
 )
 
+from redis import Redis
 from llama.model import ModelArgs, Transformer
 from llama.tokenizer import Tokenizer
 
@@ -58,15 +59,17 @@ class Llama:
         max_batch_size: int,
         model_parallel_size: Optional[int] = None,
     ) -> "Llama":
+        model_parallel_size = int(os.environ.get("WORLD_SIZE", 1))
         if not torch.distributed.is_initialized():
             torch.distributed.init_process_group("nccl")
         if not model_parallel_is_initialized():
-            if model_parallel_size is None:
-                model_parallel_size = int(os.environ.get("WORLD_SIZE", 1))
             initialize_model_parallel(model_parallel_size)
 
         local_rank = int(os.environ.get("LOCAL_RANK", 0))
         torch.cuda.set_device(local_rank)
+
+        print(f'WORLD_SIZE: {os.environ.get("WORLD_SIZE", 1)}')
+
 
         # seed must be the same in all processes
         torch.manual_seed(1)
@@ -112,6 +115,7 @@ class Llama:
         top_p: float = 0.9,
         logprobs: bool = False,
         echo: bool = False,
+        put_results_to_redis_streams: Optional[Redis] = None,
     ) -> Tuple[List[List[int]], Optional[List[List[float]]]]:
         params = self.model.params
         bsz = len(prompt_tokens)
@@ -136,6 +140,7 @@ class Llama:
         prev_pos = 0
         eos_reached = torch.tensor([False] * bsz, device="cuda")
         input_text_mask = tokens != pad_id
+
         for cur_pos in range(min_prompt_len, total_len):
             logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos)
             if logprobs:
@@ -161,6 +166,14 @@ class Llama:
                 next_token == self.tokenizer.eos_id
             )
             prev_pos = cur_pos
+
+            if put_results_to_redis_streams is not None:
+                output_text = self.tokenizer.decode(tokens)
+                put_results_to_redis_streams.xadd(
+                    'llama_test_stream2',
+                    {'text': output_text, 'is_eos': int(next_token == self.tokenizer.eos_id)}
+                )
+
             if all(eos_reached):
                 break
 
@@ -173,7 +186,7 @@ class Llama:
             toks = toks[start : len(prompt_tokens[i]) + max_gen_len]
             probs = None
             if logprobs:
-                probs = token_logprobs[i][start : len(prompt_tokens[i]) + max_gen_len]
+                probs = token_logprobs[i][start: len(prompt_tokens[i]) + max_gen_len]
             # cut to eos tok if any
             if self.tokenizer.eos_id in toks:
                 eos_idx = toks.index(self.tokenizer.eos_id)
@@ -191,6 +204,7 @@ class Llama:
         max_gen_len: Optional[int] = None,
         logprobs: bool = False,
         echo: bool = False,
+        put_results_to_redis_streams: Optional[Redis] = None,
     ) -> List[CompletionPrediction]:
         if max_gen_len is None:
             max_gen_len = self.model.params.max_seq_len - 1
@@ -202,6 +216,7 @@ class Llama:
             top_p=top_p,
             logprobs=logprobs,
             echo=echo,
+            put_results_to_redis_streams=put_results_to_redis_streams,
         )
 
         # print(f"OUTPUT GENERATION LENGTH: {len(generation_tokens)}")

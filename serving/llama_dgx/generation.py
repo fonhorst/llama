@@ -16,8 +16,9 @@ from fairscale.nn.model_parallel.initialize import (
     model_parallel_is_initialized,
 )
 
-from llama.model import ModelArgs, Transformer
-from llama.tokenizer import Tokenizer
+from redis import Redis
+from llama_dgx.model import ModelArgs, Transformer
+from llama_dgx.tokenizer import Tokenizer
 
 Role = Literal["system", "user", "assistant"]
 
@@ -58,6 +59,9 @@ class Llama:
         max_batch_size: int,
         model_parallel_size: Optional[int] = None,
     ) -> "Llama":
+        # torch.multiprocessing.set_start_method('spawn')
+        model_parallel_size = int(os.environ.get("WORLD_SIZE", 1))
+        print(f'Model parallel size: {model_parallel_size}')
         if not torch.distributed.is_initialized():
             torch.distributed.init_process_group("nccl")
         if not model_parallel_is_initialized():
@@ -67,6 +71,7 @@ class Llama:
 
         local_rank = int(os.environ.get("LOCAL_RANK", 0))
         torch.cuda.set_device(local_rank)
+
 
         # seed must be the same in all processes
         torch.manual_seed(1)
@@ -112,10 +117,12 @@ class Llama:
         top_p: float = 0.9,
         logprobs: bool = False,
         echo: bool = False,
+        put_results_to_redis_streams: Optional[Redis] = None,
     ) -> Tuple[List[List[int]], Optional[List[List[float]]]]:
         self.model.eval()
         with torch.no_grad():
             params = self.model.params
+
             bsz = len(prompt_tokens)
             assert bsz <= params.max_batch_size, (bsz, params.max_batch_size)
 
@@ -138,8 +145,11 @@ class Llama:
             prev_pos = 0
             eos_reached = torch.tensor([False] * bsz, device="cuda")
             input_text_mask = tokens != pad_id
+
             for cur_pos in range(min_prompt_len, total_len):
+                print('Running completion forward!')
                 logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos)
+                print('Running completion fin forward!')
                 if logprobs:
                     token_logprobs[:, prev_pos + 1 : cur_pos + 1] = -F.cross_entropy(
                         input=logits.transpose(1, 2),
@@ -163,6 +173,15 @@ class Llama:
                     next_token == self.tokenizer.eos_id
                 )
                 prev_pos = cur_pos
+                # print('Running completion prev_pos!')
+                # if put_results_to_redis_streams is not None:
+                #     if int(os.environ.get("LOCAL_RANK", 0)) == 0:
+                #         assert len(tokens) == 1, 'Batch size is larger than 1.'
+                #         output_text = self.tokenizer.decode(tokens[0, :cur_pos])
+                #         put_results_to_redis_streams.xadd(
+                #             'llama_test_stream2',
+                #             {'text': output_text, 'is_eos': int(next_token == self.tokenizer.eos_id)}
+                #         )
                 if all(eos_reached):
                     break
 
@@ -193,6 +212,7 @@ class Llama:
         max_gen_len: Optional[int] = None,
         logprobs: bool = False,
         echo: bool = False,
+        put_results_to_redis_streams: Optional[Redis] = None,
     ) -> List[CompletionPrediction]:
         if max_gen_len is None:
             max_gen_len = self.model.params.max_seq_len - 1
@@ -204,6 +224,7 @@ class Llama:
             top_p=top_p,
             logprobs=logprobs,
             echo=echo,
+            put_results_to_redis_streams=put_results_to_redis_streams,
         )
 
         # print(f"OUTPUT GENERATION LENGTH: {len(generation_tokens)}")

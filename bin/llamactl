@@ -13,7 +13,7 @@ function element_in_list(){
 
 servers=()
 
-ignore_nodes=(5 6 7 8 13 14 18 19 20 22 33)
+ignore_nodes=(9 10 11 12  13 14 18 19 20 22 33)
 
 #
 ## llama-2-70b
@@ -25,11 +25,12 @@ ignore_nodes=(5 6 7 8 13 14 18 19 20 22 33)
 #ckpt_path="/llama/llama-2-70b-chat-16shards-duplicated_heads"
 
 #llama-2-13b
-master_id=9
+master_id=5
 model_shards=4
 ignored_nodes_after_master=0
-container_name="llama-13b"
+container_name="llama-13b-serving"
 ckpt_path="/llama/llama-2-13b-chat-4shards/"
+tok_path="/llama/"
 
 ##llama-2-13b
 #master_id=5
@@ -50,7 +51,7 @@ done
 set -e
 
 registry="node2.bdcl:5000"
-image="llama:latest"
+image="llama-serving:latest"
 full_image="${registry}/${image}"
 llama_path="/mnt/ess_storage/DN_1/storage/home/khodorchenko/LM/llama"
 
@@ -82,7 +83,7 @@ function _exec_remotely () {
 }
 
 function build() {
-    docker build -t "${full_image}" -f Dockerfile .
+    docker build -t "${full_image}" -f serving.dockerfile .
 }
 
 function push() {
@@ -111,12 +112,19 @@ function run() {
       --mount type=bind,source=/dev/shm,target=/dev/shm
       --name=${container_name}
       --ulimit memlock=-1
-      -e CKPT_DIR_PATH=${ckpt_path}
+      -e TEMPERATURE=0.3
+      -e TOP_P=0.9
+      -e MAX_SEQ_LEN=128
+      -e MAX_GEN_LEN=64
+      -e MAX_BATCH_SIZE=1
       -e WORLD_SIZE=${#servers[@]}
       -v ${llama_path}:/llama
       -v /mnt/ess_storage/DN_1/storage/qa-system-research/zakharova/:/mnt/ess_storage/DN_1/storage/qa-system-research/zakharova/
       -d ${full_image}" ${servers[@]}
 }
+
+#      -e CKPT_DIR_PATH=${ckpt_path}
+#      -e TOKENIZER_PATH=${tok_path}
 
 function halt() {
     # shellcheck disable=SC2068
