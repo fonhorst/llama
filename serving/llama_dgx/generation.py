@@ -20,6 +20,8 @@ from redis import Redis
 from llama_dgx.model import ModelArgs, Transformer
 from llama_dgx.tokenizer import Tokenizer
 
+from settings import settings
+
 Role = Literal["system", "user", "assistant"]
 
 
@@ -146,10 +148,9 @@ class Llama:
             eos_reached = torch.tensor([False] * bsz, device="cuda")
             input_text_mask = tokens != pad_id
 
+            generated_next_tokens = []
             for cur_pos in range(min_prompt_len, total_len):
-                print('Running completion forward!')
                 logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos)
-                print('Running completion fin forward!')
                 if logprobs:
                     token_logprobs[:, prev_pos + 1 : cur_pos + 1] = -F.cross_entropy(
                         input=logits.transpose(1, 2),
@@ -173,17 +174,23 @@ class Llama:
                     next_token == self.tokenizer.eos_id
                 )
                 prev_pos = cur_pos
-                # print('Running completion prev_pos!')
-                # if put_results_to_redis_streams is not None:
-                #     if int(os.environ.get("LOCAL_RANK", 0)) == 0:
-                #         assert len(tokens) == 1, 'Batch size is larger than 1.'
-                #         output_text = self.tokenizer.decode(tokens[0, :cur_pos])
-                #         put_results_to_redis_streams.xadd(
-                #             'llama_test_stream2',
-                #             {'text': output_text, 'is_eos': int(next_token == self.tokenizer.eos_id)}
-                #         )
+                if put_results_to_redis_streams is not None:
+                    if int(os.environ.get("LOCAL_RANK", 0)) == 0:
+                        generated_next_tokens += next_token.tolist()
+                #         print(self.tokenizer.decode(generated_next_tokens), int(all(eos_reached)))
+                # #         assert len(tokens) == 1, 'Batch size is larger than 1.'
+                        output_text = self.tokenizer.decode(generated_next_tokens)
+                        put_results_to_redis_streams.xadd(
+                            settings.redis_streams_answer_stream,
+                            {'text': output_text, 'is_eos': int(all(eos_reached))}
+                        )
                 if all(eos_reached):
                     break
+            # if int(os.environ.get("LOCAL_RANK", 0)) == 0:
+            #     put_results_to_redis_streams.xadd(
+            #         'settings.redis_streams_answer_stream',
+            #         {'text': output_text, 'is_eos': 1}
+            #     )
 
             if logprobs:
                 token_logprobs = token_logprobs.tolist()

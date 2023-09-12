@@ -2,25 +2,30 @@
 
 set -ex
 
-export CUDA_VISIBLE_DEVICES="2,3,4,5"
-export NCCL_DEBUG=INFO # TRACE
-#export NCCL_PROTO=SIMPLE
+#export CUDA_VISIBLE_DEVICES="2,3,4,5"
+#export NCCL_DEBUG=INFO # TRACE
+##export NCCL_PROTO=SIMPLE
+##
+##rank=$1
+##
+##master_id=5
+##node_id=$((rank + master_id))
+##local_hostname=$(hostname)
 #
-#rank=$1
 #
-#master_id=5
-#node_id=$((rank + master_id))
-#local_hostname=$(hostname)
+##export LOGLEVEL="DEBUG"
+#export LOGLEVEL="INFO"
+#
+#/mnt/ess_storage/DN_1/storage/qa-system-research/zakharova/py_envs/transformers-py38-seq2seq/bin/python -m torch.distributed.launch \
+#    --nproc_per_node 4 \
+#    serving/celery_qa_serving_task.py
 
-
-#export LOGLEVEL="DEBUG"
-export LOGLEVEL="INFO"
-
-
-/mnt/ess_storage/DN_1/storage/qa-system-research/zakharova/py_envs/transformers-py38-seq2seq/bin/python -m torch.distributed.launch \
-    --nproc_per_node 4 \
+/py_envs/transformers-py38-seq2seq/bin/python -m torch.distributed.launch \
+    --nproc_per_node ${NUM_OF_DISTR_WORKERS} \
     serving/celery_qa_serving_task.py
 
+
+#/mnt/ess_storage/DN_1/storage/qa-system-research/zakharova/py_envs/transformers-py38-seq2seq/bin/python -m celery purge
 #torchrun \
 #    --nproc_per_node 1 \
 #    --nnodes ${WORLD_SIZE} \

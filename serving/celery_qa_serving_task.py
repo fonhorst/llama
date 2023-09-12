@@ -11,7 +11,8 @@ from settings import settings
 from redis import Redis
 from celery import Celery
 import torch
-# from celery.signals import worker_process_init
+from celery.signals import worker_process_shutdown, worker_process_init
+
 
 @dataclass
 class GenerationArguments:
@@ -21,24 +22,46 @@ class GenerationArguments:
     max_sequence_length: int
     batch_size: int
 
-rs: Redis = redis.Redis(host=settings.redis_host, port=settings.redis_port, db=settings.redis_streams_db) # TODO
+
+rs: Redis = redis.Redis(host=settings.redis_host, port=settings.redis_port, db=settings.redis_streams_db)  # TODO
 
 app = Celery(
     'celery_app',
-     broker=f'redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_celery_db}',
-     result_backend=f'redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_celery_db}'
- )
-
-
+    broker=f'redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_celery_db}',
+    result_backend=f'redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_celery_backend}'
+)
+app.conf.result_backend = f'redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_celery_backend}'
+app.conf.CELERY_ENABLE_UTC = True
 
 generator = None
 generation_args = None
-# local_rank = int(os.environ["GROUP_RANK"])
-# logging.warning(f'Rank: {local_rank}')
 
-# print(os.listdir(settings.tokenizer_path))
-# @worker_process_init.connect()
-def init_models():
+
+@app.task(name='run_completion', soft_time_limit=60)
+def run_completion(
+        input_text: str,
+):
+    try:
+        print(f'Running completion {str(os.environ["LOCAL_RANK"])}!')
+        results = generator.text_completion(
+            [input_text],
+            max_gen_len=generation_args.max_generation_length,
+            temperature=generation_args.temperature,
+            top_p=generation_args.top_p,
+            put_results_to_redis_streams=rs,
+        )
+
+    except Exception as exc:
+        print(exc)
+
+    return True
+
+
+@worker_process_init.connect
+def init_worker(**kwargs):
+    app.control.purge()
+    # TODO flush redis? unacked unacked_index
+
     global generator
     global generation_args
     generator = Llama.build(
@@ -56,24 +79,12 @@ def init_models():
     )
 
 
-@app.task(name='run_completion')
-def run_completion(
-        input_text: str,
-):
-    print(f'Running completion {str(os.environ["LOCAL_RANK"])}!')
-    results = generator.text_completion(
-        [input_text],
-        max_gen_len=generation_args.max_generation_length,
-        temperature=generation_args.temperature,
-        top_p=generation_args.top_p,
-        put_results_to_redis_streams=rs,
-    )
-
-    return results
-
-# app.conf.task_routes = {
-#     'run_completion': {'queue': 'llama'},
-# }
+@worker_process_shutdown.connect
+def shutdown_worker(**kwargs):
+    app.control.purge()
+    # TODO flush redis?
+    # Cleanup GPU and other resources here
+    # This code runs once for each worker process when it shuts down.
 
 
 if __name__ == "__main__":
@@ -82,15 +93,7 @@ if __name__ == "__main__":
         format='%(asctime)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    # torch.multiprocessing.set_start_method('spawn')
-    init_models()
+
     local_rank = str(os.environ["LOCAL_RANK"])
     args = ['worker', '--loglevel=INFO', '-n', local_rank, '-P', 'solo']
     app.worker_main(argv=args)
-    # worker = app.Worker(include=['serving.celery_qa_serving_task', 'serving.llama_dgx'])
-    # worker.start()
-
-
-
-
-

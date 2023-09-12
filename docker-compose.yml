@@ -1,0 +1,27 @@
+version: '3.3'
+
+services:
+  llm:
+    build:
+      context: .
+      dockerfile: ./serving.dockerfile
+    environment:
+      CUDA_VISIBLE_DEVICES: "4,5"
+      NUM_OF_DISTR_WORKERS: 2
+      LOGLEVEL: "INFO"
+      CKPT_DIR: /llama/llama-2-13b-chat/
+      TOKENIZER_PATH: /llama/tokenizer.model
+      TEMPERATURE: 0.3
+      TOP_P: 0.9
+      MAX_SEQ_LEN: 2048
+      MAX_GEN_LEN: 1024
+      MAX_BATCH_SIZE: 1
+      REDIS_HOST: "node9.bdcl"
+      REDIS_PORT: 6380
+      REDIS_STREAMS_DB: 1
+      REDIS_STREAMS_ANSWER_STREAM: answer_stream
+      REDIS_CELERY_DB: 0
+      REDIS_CELERY_BACKEND: 3
+    volumes:
+      - /mnt/ess_storage/DN_1/storage/home/khodorchenko/LM/llama:/llama
+      - /mnt/ess_storage/DN_1/storage/qa-system-research/zakharova/py_envs:/py_envs
