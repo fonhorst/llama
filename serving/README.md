@@ -24,3 +24,21 @@ To launch a container with 2 celery workers which process websocket queries:
   REDIS_CELERY_DB: 0 # Redis celery broker database
   REDIS_CELERY_BACKEND: 3 # Redis celery backend database
 ```
+2. Syncronize code with the dgx:
+```bash
+HOST_NAME=your_username  SYNC_HOST=host_to_which_sync ./rsync-repo.sh upload
+```
+3. On the DGX run:
+```bash
+docker-compose build
+docker-compose up -d
+```
+4. Check that everything is ok and Celery workers started:
+```bash
+docker logs --follow llama_llm_1
+```
+The model must be loaded to GPU, two celery workers are available and `run_completion` task is shown among tasks:
+```bash
+[tasks]
+  . run_completion
+```
