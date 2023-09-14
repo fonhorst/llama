@@ -11,7 +11,7 @@ from settings import settings
 from redis import Redis
 from celery import Celery
 import torch
-from celery.signals import worker_process_shutdown, worker_process_init
+from celery.signals import worker_process_shutdown, worker_process_init, task_revoked
 
 
 @dataclass
@@ -40,21 +40,34 @@ generation_args = None
 @app.task(name='run_completion', soft_time_limit=60)
 def run_completion(
         input_text: str,
+        stream_name: str = settings.redis_streams_answer_stream,
 ):
     try:
-        print(f'Running completion {str(os.environ["LOCAL_RANK"])}!')
+        print(f'Running completion {str(os.environ["LOCAL_RANK"])}')
         results = generator.text_completion(
             [input_text],
             max_gen_len=generation_args.max_generation_length,
             temperature=generation_args.temperature,
             top_p=generation_args.top_p,
             put_results_to_redis_streams=rs,
+            stream_name=stream_name
         )
+        if int(os.environ["LOCAL_RANK"]) == 0:
+            print(results)
 
     except Exception as exc:
         print(exc)
 
     return True
+
+
+@task_revoked.connect(sender=run_completion)
+def run_completion_on_revoke(sender=None, request=None, terminated=None, signum=None, expired=None, **kwargs):
+    if int(os.environ["LOCAL_RANK"]) == 0:
+        rs.xadd(
+            request.kwargs.get('stream_name'),
+            {'text': '', 'is_eos': -1}
+        )
 
 
 @worker_process_init.connect

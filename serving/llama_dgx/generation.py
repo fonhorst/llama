@@ -120,6 +120,7 @@ class Llama:
         logprobs: bool = False,
         echo: bool = False,
         put_results_to_redis_streams: Optional[Redis] = None,
+        stream_name: str = settings.redis_streams_answer_stream,
     ) -> Tuple[List[List[int]], Optional[List[List[float]]]]:
         self.model.eval()
         with torch.no_grad():
@@ -181,7 +182,7 @@ class Llama:
                 # #         assert len(tokens) == 1, 'Batch size is larger than 1.'
                         output_text = self.tokenizer.decode(generated_next_tokens)
                         put_results_to_redis_streams.xadd(
-                            settings.redis_streams_answer_stream,
+                            stream_name,
                             {'text': output_text, 'is_eos': int(all(eos_reached))}
                         )
                 if all(eos_reached):
@@ -220,6 +221,7 @@ class Llama:
         logprobs: bool = False,
         echo: bool = False,
         put_results_to_redis_streams: Optional[Redis] = None,
+        stream_name: str = settings.redis_streams_answer_stream,
     ) -> List[CompletionPrediction]:
         if max_gen_len is None:
             max_gen_len = self.model.params.max_seq_len - 1
@@ -232,6 +234,7 @@ class Llama:
             logprobs=logprobs,
             echo=echo,
             put_results_to_redis_streams=put_results_to_redis_streams,
+            stream_name=stream_name,
         )
 
         # print(f"OUTPUT GENERATION LENGTH: {len(generation_tokens)}")
