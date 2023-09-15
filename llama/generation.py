@@ -112,7 +112,9 @@ class Llama:
         top_p: float = 0.9,
         logprobs: bool = False,
         echo: bool = False,
+        masking_tokens: Optional[torch.tensor] = None,
     ) -> Tuple[List[List[int]], Optional[List[List[float]]]]:
+        masking_tokens = masking_tokens.to('cuda') if masking_tokens is not None else None
         params = self.model.params
         bsz = len(prompt_tokens)
         assert bsz <= params.max_batch_size, (bsz, params.max_batch_size)
@@ -147,9 +149,17 @@ class Llama:
                 )
             if temperature > 0:
                 probs = torch.softmax(logits[:, -1] / temperature, dim=-1)
+                if masking_tokens is not None:
+                    # print('Modifying probs')
+                    probs = probs * masking_tokens # .repeat(probs.shape[0], 1))
                 next_token = sample_top_p(probs, top_p)
             else:
-                next_token = torch.argmax(logits[:, -1], dim=-1)
+                if masking_tokens is not None:
+                    # print('Modifying logits')
+                    logs = logits[:, -1] * masking_tokens # .repeat(logits[:, -1].shape[0], 1)
+                    next_token = torch.argmax(logs, dim=-1)
+                else:
+                    next_token = torch.argmax(logits[:, -1], dim=-1)
 
             next_token = next_token.reshape(-1)
             # only replace token if prompt has already been generated
@@ -191,6 +201,7 @@ class Llama:
         max_gen_len: Optional[int] = None,
         logprobs: bool = False,
         echo: bool = False,
+        masking_tokens: Optional[torch.tensor] = None,
     ) -> List[CompletionPrediction]:
         if max_gen_len is None:
             max_gen_len = self.model.params.max_seq_len - 1
@@ -202,6 +213,7 @@ class Llama:
             top_p=top_p,
             logprobs=logprobs,
             echo=echo,
+            masking_tokens=masking_tokens,
         )
 
         # print(f"OUTPUT GENERATION LENGTH: {len(generation_tokens)}")

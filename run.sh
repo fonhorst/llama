@@ -13,8 +13,8 @@ export NCCL_PROTO=SIMPLE
 
 rank=$1
 
-#master_id=5
-master_id=9
+master_id=5
+#master_id=9
 node_id=$((rank + master_id))
 local_hostname=$(hostname)
 
@@ -35,8 +35,9 @@ torchrun \
     --ckpt_dir ${CKPT_DIR_PATH} \
     --tokenizer_path /llama/tokenizer.model \
     --max_seq_len 2048 --max_gen_len=512 --max_batch_size 2 --temperature 0.3 \
-    --prompts_directory /mnt/ess_storage/DN_1/storage/qa-system-research/zakharova/test_folder_prompts_subscribtion \
-    --prediction_files_dir /mnt/ess_storage/DN_1/storage/qa-system-research/zakharova/test_folder_prompts_outputs
+    --prompts_directory /mnt/ess_storage/DN_1/storage/qa-system-research/zakharova/test_folder_prompts_subscribtion1 \
+    --prediction_files_dir /mnt/ess_storage/DN_1/storage/qa-system-research/zakharova/test_folder_prompts_outputs1 \
+    --mask_tensor_path /llama/tensor-tokens-sber-domain_v14.pt
 
 
 #torchrun \

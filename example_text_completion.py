@@ -7,7 +7,7 @@ import logging
 import os
 from typing import Optional
 import time
-
+import torch
 import fire
 import numpy as np
 from tqdm.auto import tqdm
@@ -33,7 +33,11 @@ class GenerationArguments:
     batch_size: int
 
 
-def run_completion(model: Llama, prompts: FilePrompts, generation_args: GenerationArguments):
+def run_completion(
+        model: Llama, prompts: FilePrompts,
+        generation_args: GenerationArguments,
+        masking_tokens: Optional[torch.tensor] = None
+):
     # local_rank = int(os.environ["GROUP_RANK"])
     start = datetime.datetime.now()
     logging.warning(f'Prompt file: {prompts.path_to_file}')
@@ -53,6 +57,7 @@ def run_completion(model: Llama, prompts: FilePrompts, generation_args: Generati
             max_gen_len=generation_args.max_generation_length,
             temperature=generation_args.temperature,
             top_p=generation_args.top_p,
+            masking_tokens=masking_tokens,
         )
         # logging.warning(f"Batch done")
         for prompt_key, prediction_res in zip(input_keys, results):
@@ -72,7 +77,9 @@ def main(
         max_batch_size: int = 4,
         prompts_directory: Optional[str] = None,
         prediction_files_dir: Optional[str] = None,
+        mask_tensor_path: Optional[str] = None,
 ):
+    print('Masked tensor path: ', mask_tensor_path)
     local_rank = int(os.environ["GROUP_RANK"])
     logging.warning(f'Rank: {local_rank}')
     generator = Llama.build(
@@ -88,6 +95,10 @@ def main(
         max_sequence_length=max_seq_len,
         batch_size=max_batch_size,
     )
+    if mask_tensor_path is not None:
+        masking_tokens = torch.load(mask_tensor_path)
+    else:
+        masking_tokens = None
     checked_files = set(os.listdir(prediction_files_dir))
     count_cycles = 0
     while True:
@@ -121,6 +132,7 @@ def main(
                     generator,
                     prompt,
                     generation_args,
+                    masking_tokens=masking_tokens,
                 )
                 if local_rank == 0:
                     with open(os.path.join(prediction_files_dir, os.path.basename(prompt.path_to_file)), 'w') as f:

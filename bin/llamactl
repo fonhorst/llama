@@ -13,7 +13,7 @@ function element_in_list(){
 
 servers=()
 
-ignore_nodes=(5 6 7 8 13 14 18 19 20 22 33)
+ignore_nodes=(13 14 18 19 20 22 33) # 5 6 7 8 
 
 #
 ## llama-2-70b
@@ -25,7 +25,7 @@ ignore_nodes=(5 6 7 8 13 14 18 19 20 22 33)
 #ckpt_path="/llama/llama-2-70b-chat-16shards-duplicated_heads"
 
 #llama-2-13b
-master_id=9
+master_id=5
 model_shards=4
 ignored_nodes_after_master=0
 container_name="llama-13b"
