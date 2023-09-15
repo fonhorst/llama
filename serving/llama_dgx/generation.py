@@ -121,7 +121,9 @@ class Llama:
         echo: bool = False,
         put_results_to_redis_streams: Optional[Redis] = None,
         stream_name: str = settings.redis_streams_answer_stream,
+        masking_tokens: Optional[torch.tensor] = None
     ) -> Tuple[List[List[int]], Optional[List[List[float]]]]:
+        masking_tokens = masking_tokens.to('cuda') if masking_tokens is not None else None
         self.model.eval()
         with torch.no_grad():
             params = self.model.params
@@ -159,11 +161,25 @@ class Llama:
                         reduction="none",
                         ignore_index=pad_id,
                     )
+
                 if temperature > 0:
                     probs = torch.softmax(logits[:, -1] / temperature, dim=-1)
+                    if masking_tokens is not None:
+                        # print('Modifying probs')
+                        probs = probs * masking_tokens  # .repeat(probs.shape[0], 1))
                     next_token = sample_top_p(probs, top_p)
                 else:
-                    next_token = torch.argmax(logits[:, -1], dim=-1)
+                    if masking_tokens is not None:
+                        # print('Modifying logits')
+                        logs = logits[:, -1] * masking_tokens  # .repeat(logits[:, -1].shape[0], 1)
+                        next_token = torch.argmax(logs, dim=-1)
+                    else:
+                        next_token = torch.argmax(logits[:, -1], dim=-1)
+                # if temperature > 0:
+                #     probs = torch.softmax(logits[:, -1] / temperature, dim=-1)
+                #     next_token = sample_top_p(probs, top_p)
+                # else:
+                #     next_token = torch.argmax(logits[:, -1], dim=-1)
 
                 next_token = next_token.reshape(-1)
                 # only replace token if prompt has already been generated
@@ -222,6 +238,7 @@ class Llama:
         echo: bool = False,
         put_results_to_redis_streams: Optional[Redis] = None,
         stream_name: str = settings.redis_streams_answer_stream,
+        masking_tokens: Optional[torch.tensor] = None,
     ) -> List[CompletionPrediction]:
         if max_gen_len is None:
             max_gen_len = self.model.params.max_seq_len - 1
@@ -235,6 +252,7 @@ class Llama:
             echo=echo,
             put_results_to_redis_streams=put_results_to_redis_streams,
             stream_name=stream_name,
+            masking_tokens=masking_tokens,
         )
 
         # print(f"OUTPUT GENERATION LENGTH: {len(generation_tokens)}")

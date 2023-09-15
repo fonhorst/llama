@@ -11,6 +11,7 @@ from settings import settings
 from redis import Redis
 from celery import Celery
 import torch
+from typing import Optional
 from celery.signals import worker_process_shutdown, worker_process_init, task_revoked
 
 
@@ -35,7 +36,7 @@ app.conf.CELERY_ENABLE_UTC = True
 
 generator = None
 generation_args = None
-
+masking_tokens: Optional[torch.tensor] = None
 
 @app.task(name='run_completion', soft_time_limit=60)
 def run_completion(
@@ -50,7 +51,8 @@ def run_completion(
             temperature=generation_args.temperature,
             top_p=generation_args.top_p,
             put_results_to_redis_streams=rs,
-            stream_name=stream_name
+            stream_name=stream_name,
+            masking_tokens=masking_tokens,
         )
         if int(os.environ["LOCAL_RANK"]) == 0:
             print(results)
@@ -77,6 +79,7 @@ def init_worker(**kwargs):
 
     global generator
     global generation_args
+    global masking_tokens
     generator = Llama.build(
         ckpt_dir=settings.ckpt_dir,
         tokenizer_path=settings.tokenizer_path,
@@ -90,6 +93,8 @@ def init_worker(**kwargs):
         max_sequence_length=settings.max_seq_len,
         batch_size=settings.max_batch_size,
     )
+    if settings.masking_tokens_path is not None:
+        masking_tokens = torch.load(settings.masking_tokens_path)
 
 
 @worker_process_shutdown.connect

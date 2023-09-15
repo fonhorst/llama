@@ -11,6 +11,7 @@ services:
       LOGLEVEL: "INFO"
       CKPT_DIR: /llama/llama-2-13b-chat/
       TOKENIZER_PATH: /llama/tokenizer.model
+      MASKING_TOKENS_PATH: /llama/tensor-tokens-sber-domain_v14.pt
       TEMPERATURE: 0.3
       TOP_P: 0.9
       MAX_SEQ_LEN: 2048

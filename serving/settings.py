@@ -1,9 +1,11 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import os
+from typing import Optional
 
 class Settings(BaseSettings):
     ckpt_dir: str = '/mnt/ess_storage/DN_1/storage/home/khodorchenko/LM/llama/llama-2-13b-chat-4shards/'
     tokenizer_path: str = '/mnt/ess_storage/DN_1/storage/home/khodorchenko/LM/llama/tokenizer.model'
+    masking_tokens_path: Optional[str] = None
     redis_host: str = "node9.bdcl"
     redis_port: int = 6379
     redis_streams_db: int = 1
@@ -15,6 +17,7 @@ class Settings(BaseSettings):
     max_seq_len: int = 2048
     max_gen_len: int = 512
     max_batch_size: int = 1
+
 
     model_config = SettingsConfigDict(
         env_file=os.path.join(
