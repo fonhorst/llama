@@ -34,7 +34,7 @@ torchrun \
     example_text_completion.py \
     --ckpt_dir ${CKPT_DIR_PATH} \
     --tokenizer_path /llama/tokenizer.model \
-    --max_seq_len 2048 --max_gen_len=512 --max_batch_size 2 --temperature 0.3 \
+    --max_seq_len 4096 --max_gen_len=512 --max_batch_size 2 --temperature 0.3 \
     --prompts_directory /mnt/ess_storage/DN_1/storage/qa-system-research/zakharova/test_folder_prompts_subscribtion1 \
     --prediction_files_dir /mnt/ess_storage/DN_1/storage/qa-system-research/zakharova/test_folder_prompts_outputs1 \
     --mask_tensor_path /llama/tensor-tokens-sber-domain_v14.pt

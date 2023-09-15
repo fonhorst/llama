@@ -114,14 +114,15 @@ class Llama:
         echo: bool = False,
         masking_tokens: Optional[torch.tensor] = None,
     ) -> Tuple[List[List[int]], Optional[List[List[float]]]]:
+        # print('entered generate ')
         masking_tokens = masking_tokens.to('cuda') if masking_tokens is not None else None
         params = self.model.params
         bsz = len(prompt_tokens)
         assert bsz <= params.max_batch_size, (bsz, params.max_batch_size)
 
         # Truncate long sequences
-        prompt_tokens = [t[:params.max_seq_len] for t in prompt_tokens]
-
+        prompt_tokens = [t[:params.max_seq_len - max_gen_len] for t in prompt_tokens]
+        # print([len(t) for t in prompt_tokens])
         min_prompt_len = min(len(t) for t in prompt_tokens)
         max_prompt_len = max(len(t) for t in prompt_tokens)
 
@@ -139,6 +140,7 @@ class Llama:
         eos_reached = torch.tensor([False] * bsz, device="cuda")
         input_text_mask = tokens != pad_id
         for cur_pos in range(min_prompt_len, total_len):
+            # print('entered loop')
             logits = self.model.forward(tokens[:, prev_pos:cur_pos], prev_pos)
             if logprobs:
                 token_logprobs[:, prev_pos + 1 : cur_pos + 1] = -F.cross_entropy(
@@ -149,10 +151,13 @@ class Llama:
                 )
             if temperature > 0:
                 probs = torch.softmax(logits[:, -1] / temperature, dim=-1)
+                next_token_no_mask = sample_top_p(probs, top_p)
+                # print('next_token_no_mask', next_token_no_mask)
                 if masking_tokens is not None:
                     # print('Modifying probs')
                     probs = probs * masking_tokens # .repeat(probs.shape[0], 1))
                 next_token = sample_top_p(probs, top_p)
+                # print('next_token', next_token)
             else:
                 if masking_tokens is not None:
                     # print('Modifying logits')
