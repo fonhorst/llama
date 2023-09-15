@@ -14,7 +14,7 @@ services:
       MASKING_TOKENS_PATH: /llama/tensor-tokens-sber-domain_v14.pt
       TEMPERATURE: 0.3
       TOP_P: 0.9
-      MAX_SEQ_LEN: 2048
+      MAX_SEQ_LEN: 4096
       MAX_GEN_LEN: 1024
       MAX_BATCH_SIZE: 1
       REDIS_HOST: "node9.bdcl"

@@ -132,7 +132,8 @@ class Llama:
             assert bsz <= params.max_batch_size, (bsz, params.max_batch_size)
 
             # Truncate long sequences
-            prompt_tokens = [t[:params.max_seq_len] for t in prompt_tokens]
+            # prompt_tokens = [t[:params.max_seq_len] for t in prompt_tokens]
+            prompt_tokens = [t[:params.max_seq_len - max_gen_len] for t in prompt_tokens]
 
             min_prompt_len = min(len(t) for t in prompt_tokens)
             max_prompt_len = max(len(t) for t in prompt_tokens)
@@ -203,11 +204,9 @@ class Llama:
                         )
                 if all(eos_reached):
                     break
-            # if int(os.environ.get("LOCAL_RANK", 0)) == 0:
-            #     put_results_to_redis_streams.xadd(
-            #         'settings.redis_streams_answer_stream',
-            #         {'text': output_text, 'is_eos': 1}
-            #     )
+            if int(os.environ.get("LOCAL_RANK", 0)) == 0:
+                put_results_to_redis_streams.expire(stream_name, 3600)
+
 
             if logprobs:
                 token_logprobs = token_logprobs.tolist()
