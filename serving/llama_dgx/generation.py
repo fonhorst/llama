@@ -205,7 +205,8 @@ class Llama:
                 if all(eos_reached):
                     break
             if int(os.environ.get("LOCAL_RANK", 0)) == 0:
-                put_results_to_redis_streams.expire(stream_name, 3600)
+                if put_results_to_redis_streams is not None:
+                    put_results_to_redis_streams.expire(stream_name, 3600)
 
 
             if logprobs:
