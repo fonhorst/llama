@@ -13,9 +13,33 @@ function element_in_list(){
 
 servers=()
 
-ignore_nodes=(33)
+ignore_nodes=(13 14 18 19 20 22 33) # 5 6 7 8 
 
-for (( node=1; node<=2; node++ ))
+#
+## llama-2-70b
+#master_id=5
+#ignored_nodes_after_master=4
+#model_shards=16
+#container_name="llama-70b"
+##ckpt_path="/llama/llama-2-70b-chat-16shards"
+#ckpt_path="/llama/llama-2-70b-chat-16shards-duplicated_heads"
+
+#llama-2-13b
+master_id=5
+model_shards=4
+ignored_nodes_after_master=0
+container_name="llama-13b"
+ckpt_path="/llama/llama-2-13b-chat-4shards/"
+
+##llama-2-13b
+#master_id=5
+#model_shards=4
+#ignored_nodes_after_master=0
+#container_name="llama-13b-1"
+#ckpt_path="/llama/llama-2-13b-chat-4shards/"
+
+
+for (( node=$master_id; node<=$((master_id + model_shards - 1 + ignored_nodes_after_master)); node++ ))
 do
 	element_in_list $node "${ignore_nodes[@]}"
   if [[ $? -eq 1 ]]
@@ -28,9 +52,7 @@ set -e
 registry="node2.bdcl:5000"
 image="llama:latest"
 full_image="${registry}/${image}"
-container_name="llama"
 llama_path="/mnt/ess_storage/DN_1/storage/home/khodorchenko/LM/llama"
-ckpt_path="/llama/llama-2-13b-chat/"
 
 function _exec_remotely_with_counter () {
     cmd=$1
@@ -88,9 +110,11 @@ function run() {
       --network='host'
       --mount type=bind,source=/dev/shm,target=/dev/shm
       --name=${container_name}
+      --ulimit memlock=-1
       -e CKPT_DIR_PATH=${ckpt_path}
       -e WORLD_SIZE=${#servers[@]}
       -v ${llama_path}:/llama
+      -v /mnt/ess_storage/DN_1/storage/qa-system-research/zakharova/:/mnt/ess_storage/DN_1/storage/qa-system-research/zakharova/
       -d ${full_image}" ${servers[@]}
 }
 

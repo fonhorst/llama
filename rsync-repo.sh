@@ -42,7 +42,9 @@ function sync() {
 
     check_host
     host=$SYNC_HOST
-
+    if [[ -n $HOST_NAME ]]; then
+        host="$HOST_NAME@$SYNC_HOST"
+    fi
     sync_dir=$(get_dir)
 
     if [[ "$1" = true ]] ; then
@@ -59,7 +61,7 @@ function sync() {
         --exclude 'kafka_2.11-*' \
         --exclude '*__pycache__*' \
         --exclude '*target*' \
-	--exclude '*ipynb_checkpints' \
+	      --exclude '*ipynb_checkpints' \
         --exclude 'venv' \
         --exclude 'download-cache' \
         --exclude '*.iml' \
