@@ -16,7 +16,7 @@ import torch.distributed as dist
 # from watchdog.observers import Observer
 # from watchdog.events import FileSystemEventHandler
 
-from llama import Llama
+from llama_dgx import Llama
 
 @dataclass
 class FilePrompts:
@@ -73,7 +73,7 @@ def main(
         prompts_directory: Optional[str] = None,
         prediction_files_dir: Optional[str] = None,
 ):
-    local_rank = int(os.environ["GROUP_RANK"])
+    local_rank = int(os.environ["LOCAL_RANK"])
     logging.warning(f'Rank: {local_rank}')
     generator = Llama.build(
         ckpt_dir=ckpt_dir,
